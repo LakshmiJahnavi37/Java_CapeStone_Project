@@ -11,8 +11,7 @@ class EmployeeLeaveSystem {
         String password = "";
         String role = "";              // Employee, Team Lead, HOD, Manager, Director
         boolean isRegistered = false;
-
-        // Login status
+//login 
         boolean isLoggedIn = false;
 
         // Leave details
