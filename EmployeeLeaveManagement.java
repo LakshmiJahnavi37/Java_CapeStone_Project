@@ -1,20 +1,41 @@
 import java.util.Scanner;
 
-class EmployeeLeaveSystem {
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import static com.mongodb.client.model.Filters.*;
+import org.bson.Document;
+
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+public class EmployeeLeaveManagement {
+
+    public static String hashPassword(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(password.getBytes());
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static void main(String[] args) {
 
         Scanner sc = new Scanner(System.in);
 
-        // Registration details
+        MongoDatabase db = MongoDBConnection.getDatabase();
+        MongoCollection<Document> users = db.getCollection("users");
+
         String username = "";
-        String password = "";
-        String role = "";              // Employee, Team Lead, HOD, Manager, Director
+        String role = "";
         boolean isRegistered = false;
-//login 
         boolean isLoggedIn = false;
 
-        // Leave details
         int leaveDays = 0;
         String leaveReason = "";
         String leaveAppliedBy = "";
@@ -38,68 +59,74 @@ class EmployeeLeaveSystem {
             System.out.print("Enter your choice: ");
 
             choice = sc.nextInt();
-            sc.nextLine(); // clear buffer
+            sc.nextLine();
 
             switch (choice) {
 
-                // ---------------- REGISTER ----------------
+               
                 case 1:
-                    if (isRegistered) {
-                        System.out.println("User already registered.");
-                    } else {
-                        System.out.print("Create Username: ");
-                        username = sc.nextLine();
+                    System.out.print("Create Username: ");
+                    username = sc.nextLine();
 
-                        System.out.print("Create Password: ");
-                        password = sc.nextLine();
+                    System.out.print("Create Password: ");
+                    String password = sc.nextLine();
 
-                        System.out.println("Register As:");
-                        System.out.println("1. Employee");
-                        System.out.println("2. Team Lead");
-                        System.out.println("3. HOD");
-                        System.out.println("4. Manager");
-                        System.out.println("5. Director");
-                        System.out.print("Enter choice: ");
+                    System.out.println("Register As:");
+                    System.out.println("1. Employee");
+                    System.out.println("2. Team Lead");
+                    System.out.println("3. HOD");
+                    System.out.println("4. Manager");
+                    System.out.println("5. Director");
+                    System.out.print("Enter choice: ");
 
-                        int roleChoice = sc.nextInt();
-                        sc.nextLine();
+                    int roleChoice = sc.nextInt();
+                    sc.nextLine();
 
-                        switch (roleChoice) {
-                            case 1: role = "Employee"; break;
-                            case 2: role = "Team Lead"; break;
-                            case 3: role = "HOD"; break;
-                            case 4: role = "Manager"; break;
-                            case 5: role = "Director"; break;
-                            default: role = "Employee";
-                        }
-
-                        isRegistered = true;
-                        System.out.println("Registration Successful.");
-                        System.out.println("Registered Role: " + role);
+                    switch (roleChoice) {
+                        case 1: role = "Employee"; break;
+                        case 2: role = "Team Lead"; break;
+                        case 3: role = "HOD"; break;
+                        case 4: role = "Manager"; break;
+                        case 5: role = "Director"; break;
+                        default: role = "Employee";
                     }
+
+                    String hashedPassword = hashPassword(password);
+
+                    Document user = new Document("username", username)
+                            .append("password", hashedPassword)
+                            .append("role", role);
+
+                    users.insertOne(user);
+
+                    isRegistered = true;
+                    System.out.println("Registration Successful & Saved in MongoDB.");
                     break;
 
-                // ---------------- LOGIN ----------------
+               
                 case 2:
-                    if (!isRegistered) {
-                        System.out.println("Please register first.");
+                    System.out.print("Enter Username: ");
+                    String u = sc.nextLine();
+
+                    System.out.print("Enter Password: ");
+                    String p = sc.nextLine();
+
+                    String hashedInput = hashPassword(p);
+
+                    Document foundUser = users.find(
+                            and(eq("username", u), eq("password", hashedInput))
+                    ).first();
+
+                    if (foundUser != null) {
+                        isLoggedIn = true;
+                        username = foundUser.getString("username");
+                        role = foundUser.getString("role");
+                        System.out.println("Login Successful.");
                     } else {
-                        System.out.print("Enter Username: ");
-                        String u = sc.nextLine();
-
-                        System.out.print("Enter Password: ");
-                        String p = sc.nextLine();
-
-                        if (u.equals(username) && p.equals(password)) {
-                            isLoggedIn = true;
-                            System.out.println("Login Successful.");
-                        } else {
-                            System.out.println("Invalid Login Details.");
-                        }
+                        System.out.println("Invalid Login Details.");
                     }
                     break;
 
-                // ---------------- VIEW PROFILE ----------------
                 case 3:
                     if (isLoggedIn) {
                         System.out.println("----- Profile -----");
@@ -111,7 +138,6 @@ class EmployeeLeaveSystem {
                     }
                     break;
 
-                // ---------------- APPLY LEAVE ----------------
                 case 4:
                     if (!isLoggedIn) {
                         System.out.println("Please login first.");
@@ -127,11 +153,10 @@ class EmployeeLeaveSystem {
 
                         leaveAppliedBy = role;
 
-                        // Approval logic
                         if (role.equals("Employee") || role.equals("Team Lead")) {
-                            leaveStatus = "Pending";      // Needs Admin approval
+                            leaveStatus = "Pending";
                         } else {
-                            leaveStatus = "Approved";     // Higher authority
+                            leaveStatus = "Approved";
                         }
 
                         leaveApplied = true;
@@ -142,7 +167,6 @@ class EmployeeLeaveSystem {
                     }
                     break;
 
-                // ---------------- VIEW LEAVE STATUS ----------------
                 case 5:
                     if (!leaveApplied) {
                         System.out.println("No leave applied yet.");
@@ -155,47 +179,52 @@ class EmployeeLeaveSystem {
                     }
                     break;
 
-                // ---------------- ADMIN APPROVAL ----------------
                 case 6:
-                    if (!leaveApplied) {
-                        System.out.println("No leave request available.");
-                    } 
-                    else if (leaveAppliedBy.equals("HOD") ||
-                             leaveAppliedBy.equals("Manager") ||
-                             leaveAppliedBy.equals("Director")) {
 
-                        System.out.println("Leave already auto-approved (Higher Authority).");
+    if (!isLoggedIn) {
+        System.out.println("Please login first.");
+        break;
+    }
 
-                    } 
-                    else if (!leaveStatus.equals("Pending")) {
-                        System.out.println("Leave already processed.");
-                    } 
-                    else {
-                        System.out.println("----- Admin Approval -----");
-                        System.out.println("Applied By : " + leaveAppliedBy);
-                        System.out.println("Days       : " + leaveDays);
-                        System.out.println("Reason     : " + leaveReason);
+    if (!leaveApplied) {
+        System.out.println("No leave request available.");
+        break;
+    }
 
-                        System.out.println("1. Approve Leave");
-                        System.out.println("2. Reject Leave");
-                        System.out.print("Enter choice: ");
+    if (!(role.equals("HOD") || role.equals("Manager") || role.equals("Director"))) {
+        System.out.println("Only HOD / Manager / Director can approve or reject leave.");
+        break;
+    }
 
-                        int adminChoice = sc.nextInt();
-                        sc.nextLine();
+    if (!leaveStatus.equals("Pending")) {
+        System.out.println("Leave already processed.");
+        break;
+    }
 
-                        if (adminChoice == 1) {
-                            leaveStatus = "Approved";
-                            System.out.println("Leave Approved by Admin.");
-                        } else if (adminChoice == 2) {
-                            leaveStatus = "Rejected";
-                            System.out.println("Leave Rejected by Admin.");
-                        } else {
-                            System.out.println("Invalid choice.");
-                        }
-                    }
-                    break;
+    System.out.println("----- Approval Section -----");
+    System.out.println("Applied By : " + leaveAppliedBy);
+    System.out.println("Days       : " + leaveDays);
+    System.out.println("Reason     : " + leaveReason);
 
-                // ---------------- LOGOUT ----------------
+    System.out.println("1. Approve Leave");
+    System.out.println("2. Reject Leave");
+    System.out.print("Enter choice: ");
+
+    int adminChoice = sc.nextInt();
+    sc.nextLine();
+
+    if (adminChoice == 1) {
+        leaveStatus = "Approved";
+        System.out.println("Leave Approved by " + role);
+    } else if (adminChoice == 2) {
+        leaveStatus = "Rejected";
+        System.out.println("Leave Rejected by " + role);
+    } else {
+        System.out.println("Invalid choice.");
+    }
+
+    break;
+
                 case 7:
                     if (isLoggedIn) {
                         isLoggedIn = false;
@@ -205,7 +234,7 @@ class EmployeeLeaveSystem {
                     }
                     break;
 
-                // ---------------- EXIT ----------------
+              
                 case 8:
                     System.out.println("Exiting System...");
                     break;
